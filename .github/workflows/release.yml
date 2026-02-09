@@ -39,6 +39,8 @@ jobs:
             -output "target/release/${BIN_NAME}"
 
       - name: Package
+        env:
+          CI: false
         run: cargo packager --release --formats dmg
 
       - name: Upload release assets
