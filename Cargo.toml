@@ -1,0 +1,21 @@
+[package]
+name = "theatremix_remote_display"
+version = "0.1.0"
+edition = "2024"
+authors = ["William Stoneham <william.stoneham04@gmail.com>"]
+license = "MIT"
+description = "A TheatreMix companion app that receives OSC and renders the remote display UI."
+homepage = "https://github.com/RockBacon9922/theatremix-remote-display"
+repository = "https://github.com/RockBacon9922/theatremix-remote-display"
+
+[dependencies]
+dirs = "6"
+eframe = "0.33"
+image = "0.25"
+rosc = "0.11"
+
+
+[[bin]]
+# Use a hyphenated executable name so macOS menus don't show underscores.
+name = "theatremix-remote-display"
+path = "src/main.rs"

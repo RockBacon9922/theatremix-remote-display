@@ -1,0 +1,24 @@
+name = "theatremix_remote_display"
+productName = "TheatreMix Remote Display"
+identifier = "com.williamstoneham.theatremix-remote-display"
+version = "0.1.0"
+category = "public.app-category.utilities"
+description = "TheatreMix companion app for OSC remote display."
+longDescription = """
+A TheatreMix companion app that receives OSC and renders
+the TheatreMix remote display UI.
+"""
+icons = ["assets/512x512@2x.icns"]
+outDir = "dist"
+binariesDir = "target/release"
+[[binaries]]
+path = "theatremix_remote_display"
+main = true
+
+[macos]
+minimumSystemVersion = "11.0"
+
+[dmg]
+windowSize = { width = 600, height = 400 }
+appPosition = { x = 170, y = 190 }
+appFolderPosition = { x = 430, y = 190 }
