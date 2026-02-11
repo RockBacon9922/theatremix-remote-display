@@ -235,8 +235,8 @@ fn spawn_osc_thread(host: String, tx: Sender<NetEvent>, cmd_rx: Receiver<NetCmd>
         let local_addr: SocketAddr = "0.0.0.0:0".parse().unwrap();
         let mut current_host = host;
         let mut socket = match bind_socket(local_addr, &current_host, &tx) {
-            Ok(s) => s,
-            Err(_) => return,
+            Ok(s) => Some(s),
+            Err(_) => None,
         };
 
         let mut last_subscribe = Instant::now() - Duration::from_secs(10);
@@ -247,10 +247,10 @@ fn spawn_osc_thread(host: String, tx: Sender<NetEvent>, cmd_rx: Receiver<NetCmd>
             match cmd_rx.try_recv() {
                 Ok(NetCmd::SetHost(new_host)) => {
                     current_host = new_host;
-                    match bind_socket(local_addr, &current_host, &tx) {
-                        Ok(s) => socket = s,
-                        Err(_) => continue,
-                    }
+                    socket = match bind_socket(local_addr, &current_host, &tx) {
+                        Ok(s) => Some(s),
+                        Err(_) => None,
+                    };
                     subscription_expiry = 0;
                     last_subscribe = Instant::now() - Duration::from_secs(10);
                     last_thump = Instant::now() - Duration::from_secs(10);
@@ -259,6 +259,12 @@ fn spawn_osc_thread(host: String, tx: Sender<NetEvent>, cmd_rx: Receiver<NetCmd>
                 Err(TryRecvError::Disconnected) => break,
             }
 
+            // Only proceed with network operations if we have a valid socket
+            let Some(ref sock) = socket else {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            };
+
             let subscribe_interval = if subscription_expiry > 0 {
                 Duration::from_secs((subscription_expiry / 2).max(2) as u64)
             } else {
@@ -266,18 +272,18 @@ fn spawn_osc_thread(host: String, tx: Sender<NetEvent>, cmd_rx: Receiver<NetCmd>
             };
 
             if last_subscribe.elapsed() >= subscribe_interval {
-                send_osc(&socket, "/subscribe", &[]);
+                send_osc(sock, "/subscribe", &[]);
                 last_subscribe = Instant::now();
             }
 
             if last_thump.elapsed() >= Duration::from_secs(2) {
                 // Keep session alive
-                send_osc(&socket, "/thump", &[]);
+                send_osc(sock, "/thump", &[]);
                 last_thump = Instant::now();
             }
 
             let mut buf = [0u8; 1536];
-            match socket.recv(&mut buf) {
+            match sock.recv(&mut buf) {
                 Ok(n) => {
                     if let Ok((_, packet)) = rosc::decoder::decode_udp(&buf[..n]) {
                         match packet {
