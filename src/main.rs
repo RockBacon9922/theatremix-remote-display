@@ -4,7 +4,7 @@ use eframe::egui::ViewportBuilder;
 use eframe::{App, Frame, egui};
 use rosc::{OscMessage, OscPacket, OscType};
 use std::fs;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -159,9 +159,8 @@ impl App for TheatreMixApp {
                     if ui.button("Apply").clicked() {
                         let new_host = self.host_edit.trim().to_string();
                         if !new_host.is_empty() && new_host != self.host {
-                            // Validate the host can be parsed as a socket address
-                            if format!("{}:32000", new_host).parse::<SocketAddr>().is_ok() 
-                               || new_host.contains(':') && new_host.parse::<SocketAddr>().is_ok() {
+                            // Validate the host can be resolved to a socket address
+                            if format!("{}:32000", new_host).to_socket_addrs().is_ok() {
                                 self.host = new_host.clone();
                                 let _ = self.cmd_tx.send(NetCmd::SetHost(new_host));
                                 self.status = "Reconnecting...".to_string();
@@ -170,7 +169,7 @@ impl App for TheatreMixApp {
                                     let _ = save_host(path, &self.host);
                                 }
                             } else {
-                                self.status = format!("Invalid host format: {}", new_host);
+                                self.status = format!("Invalid host: {}", new_host);
                             }
                         }
                     }
@@ -312,14 +311,26 @@ fn spawn_osc_thread(host: String, tx: Sender<NetEvent>, cmd_rx: Receiver<NetCmd>
 }
 
 fn bind_socket(local_addr: SocketAddr, host: &str, tx: &Sender<NetEvent>) -> Result<UdpSocket, String> {
-    let remote_addr: SocketAddr = match format!("{host}:32000").parse() {
-        Ok(addr) => addr,
+    // Try to resolve the host:port to a socket address
+    let addr_str = format!("{}:32000", host);
+    let remote_addr: SocketAddr = match addr_str.to_socket_addrs() {
+        Ok(mut addrs) => {
+            match addrs.next() {
+                Some(addr) => addr,
+                None => {
+                    let err_msg = format!("Could not resolve host '{}'", host);
+                    let _ = tx.send(NetEvent::Error(err_msg.clone()));
+                    return Err(err_msg);
+                }
+            }
+        }
         Err(e) => {
             let err_msg = format!("Invalid host address '{}': {}", host, e);
             let _ = tx.send(NetEvent::Error(err_msg.clone()));
             return Err(err_msg);
         }
     };
+    
     let socket = match UdpSocket::bind(local_addr) {
         Ok(s) => s,
         Err(e) => {
